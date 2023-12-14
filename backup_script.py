@@ -4,7 +4,7 @@ from datetime import datetime
 import requests
 import os
 from datetime import timedelta
-
+import json
 
 #function definitions
 
@@ -46,39 +46,56 @@ def make_backup():
 """
 check_rotation function keeps only latest files as {daily} files daily, {monthly} files monthly, {weekly} files weekly
 """
+def delete(filename):
+    subprocess.run(["rclone", "delete", f"remote:Back_it_up/{filename}"])
 
-def check_rotation():
-    remote_files = subprocess.check_output(["rclone", "ls", f"remote:Back_it_up"]).decode('utf-8').splitlines()
-    daily = 1
-    weekly = 4
-    monthly = 12
-    today = datetime.today().date()
-    backup_dates = [datetime.strptime(file.split("||")[1], "%m--%d--%Y").date() for file in remote_files]
-   
-    #daily
-    daily_backups = [file for file, backup_date in zip(remote_files, backup_dates) if backup_date == today]
-    keep_daily = daily
-    daily_backups = daily_backups[-keep_daily:]
-    remaining_files = [file for file in remote_files if file not in daily_backups]
-    #week
-    weekly_backups = [file for file, backup_date in zip(remaining_files, backup_dates) 
-                      if backup_date.isocalendar()[1] == today.isocalendar()[1]]
-    keep_weekly = weekly
-    weekly_backups = weekly_backups[-keep_weekly:]
-    remaining_files = [file for file in remaining_files if file not in weekly_backups]
-    #month
-    monthly_backups = [file for file, backup_date in zip(remaining_files, backup_dates) 
-                       if backup_date.month == today.month]
-    keep_monthly = monthly
-    monthly_backups = monthly_backups[-keep_monthly:]
+def daily_check_rotation():
 
-    backups_to_keep = set(daily_backups)# + weekly_backups + monthly_backups)
-    backups_to_delete = set(remote_files) - backups_to_keep
+        daily = 4
+        remote_files = subprocess.check_output(["rclone", "lsjson", "remote:Back_it_up"]).decode('utf-8')
+        backup_info = json.loads(remote_files)
+        sorted_backups = sorted(backup_info, key=lambda x: datetime.fromisoformat(x["ModTime"][:-1]), reverse=True)
+        today = datetime.today().date()
+        daily_backups = sorted_backups[:daily]
 
-    for old_backup in backups_to_delete:
-        subprocess.run(["rclone", "delete", f"remote:Back_it_up/{old_backup.split()[-1]}"])
-  
-        
+        for backup in sorted_backups[daily:]:
+            print(f"Deleting: {backup['Name']}")
+            delete(backup["Name"])
+
+        print("Rotation Completed Successfully")
+
+def weekly_check_rotation():
+    
+        weekly = 2
+        remote_files = subprocess.check_output(["rclone", "lsjson", "remote:Back_it_up"]).decode('utf-8')
+        backup_info = json.loads(remote_files)
+        sorted_backups = sorted(backup_info, key=lambda x: datetime.fromisoformat(x["ModTime"][:-1]), reverse=True)
+        today = datetime.today().date()
+        weekly_backups = [backup for backup in sorted_backups if (today - datetime.fromisoformat(backup["ModTime"][:-1]).date()).days <= weekly]
+
+        for backup in sorted_backups[weekly:]:
+            print(f"Deleting: {backup['Name']}")
+            delete(backup["Name"])
+
+        print("Weekly Rotation Completed Successfully")
+
+
+def monthly_check_rotation():
+    
+        monthly = 1
+        remote_files = subprocess.check_output(["rclone", "lsjson", "remote:Back_it_up"]).decode('utf-8')
+        backup_info = json.loads(remote_files)
+        sorted_backups = sorted(backup_info, key=lambda x: datetime.fromisoformat(x["ModTime"][:-1]), reverse=True)
+        today = datetime.today().date()
+        monthly_backups = [backup for backup in sorted_backups if (today - datetime.fromisoformat(backup["ModTime"][:-1]).date()).days <= monthly]
+
+        for backup in sorted_backups[monthly:]:
+            print(f"Deleting: {backup['Name']}")
+            delete(backup["Name"])
+
+        print("Monthly Rotation Completed Successfully")
+
+
 """
 notify() will notify on successfull execution of the script
 """
@@ -104,10 +121,12 @@ pull_update_local()
 make_backup()
 
 #checking the rotations
-check_rotation()
+daily_check_rotation()
+weekly_check_rotation()
+monthly_check_rotation()	
 
 #notification
-notify()
+#notify()
 
 
 
