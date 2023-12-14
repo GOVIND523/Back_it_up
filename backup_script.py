@@ -6,68 +6,88 @@ import os
 from datetime import timedelta
 import json
 
+#variables
+
+Project_dir = "/home/vboxuser/Back_it_up"
+Curl_enable = True
+Webhook_url = "https://webhook.site/e45e6bab-8f6f-4525-a95e-314c029bae1a"
+Gdrive_folder= "Back_it_up"
+Back_daily = 1
+Back_weekly = 7
+Back_monthly = 12
+tstamp = datetime.now().strftime("||%m--%d--%Y||%H::%M::%S")
+
+
 #function definitions
 
 """
-pull_upate_local function will update the local repo by pulling the changes from remote repo it any
+-------------------------------------------------------------------------------------
+pull_upate_local() 
+
+  Will update your local repo by pulling the changes from remote repo it any
+-------------------------------------------------------------------------------------
 """
 
 def pull_update_local():
   try:
-    subprocess.run(['git','-C', "/home/vboxuser/Back_it_up", 'pull', 'origin', 'main'], check=True)
-    print("Upated the local repository")
+    subprocess.run(['git','-C', Project_dir , 'pull', 'origin', 'main'], check=True)
+    print("Updated the local repository")
   except subprocess.CalledProcessError:
     print("Could not update local repository");
     
-    
-    
+      
 """
-make_backup function 
-1. capture the timestamp
-2. create the local repos zip an store it in local backup folder with the timestamp
-3. upload the folder to google drive 
-4. delete the local backup that we created
-5. check curl value and send a backup notification if enabled
+-------------------------------------------------------------------------------------
+make_backup()  
+
+  1. Create the local repos zip an store it in local backup folder with the timestamp
+  2. Upload the folder to google drive 
+  3. Delete the local backup that we created
+-------------------------------------------------------------------------------------
 """
  
 def make_backup():
   #1
-  tstamp = datetime.now().strftime("||%m--%d--%Y||%H::%M::%S")
+  local_backup = f"{Project_dir}/Backup{tstamp}"
+  shutil.make_archive(local_backup , "zip" , Project_dir)
   #2
-  local_backup = f"/home/vboxuser/Back_it_up/Backup{tstamp}"
-  shutil.make_archive(local_backup , "zip" , "/home/vboxuser/Back_it_up")
+  subprocess.run(["rclone","copy",f"{local_backup}.zip","remote:{Gdrive_folder}/"], check= True)
   #3
-  subprocess.run(["rclone","copy",f"{local_backup}.zip","remote:Back_it_up/"], check= True)
-  #4
   os.remove(f"{local_backup}.zip")
    	
-   	
-    	
+
 """
-check_rotation function keeps only latest files as {daily} files daily, {monthly} files monthly, {weekly} files weekly
+-------------------------------------------------------------------------------------
+check_rotation()  
+
+  1. Check daily rotation delete unwanted backups
+  2. Check weekly rotation delete unwanted backups
+  3. Check monthly rotation delete unwanted backups
+-------------------------------------------------------------------------------------
 """
 def delete(filename):
-    subprocess.run(["rclone", "delete", f"remote:Back_it_up/{filename}"])
+  rm_file = f"remote:{Gdrive_folder}/{filename}"
+  subprocess.run(["rclone", "delete", rm_file])
 
 def daily_check_rotation():
+  remote = f"remote:{Gdrive_folder}"
+  daily = Back_daily
+  remote_files = subprocess.check_output(["rclone", "lsjson", remote]).decode('utf-8')
+  backup_info = json.loads(remote_files)
+  sorted_backups = sorted(backup_info, key=lambda x: datetime.fromisoformat(x["ModTime"][:-1]), reverse=True)
+  today = datetime.today().date()
+  daily_backups = sorted_backups[:daily]
 
-        daily = 4
-        remote_files = subprocess.check_output(["rclone", "lsjson", "remote:Back_it_up"]).decode('utf-8')
-        backup_info = json.loads(remote_files)
-        sorted_backups = sorted(backup_info, key=lambda x: datetime.fromisoformat(x["ModTime"][:-1]), reverse=True)
-        today = datetime.today().date()
-        daily_backups = sorted_backups[:daily]
+  for backup in sorted_backups[daily:]:
+    print(f"Deleting: {backup['Name']}")
+    delete(backup["Name"])
 
-        for backup in sorted_backups[daily:]:
-            print(f"Deleting: {backup['Name']}")
-            delete(backup["Name"])
-
-        print("Rotation Completed Successfully")
+  print("Rotation Completed Successfully")
 
 def weekly_check_rotation():
     
         weekly = 2
-        remote_files = subprocess.check_output(["rclone", "lsjson", "remote:Back_it_up"]).decode('utf-8')
+        remote_files = subprocess.check_output(["rclone", "lsjson", remote]).decode('utf-8')
         backup_info = json.loads(remote_files)
         sorted_backups = sorted(backup_info, key=lambda x: datetime.fromisoformat(x["ModTime"][:-1]), reverse=True)
         today = datetime.today().date()
@@ -77,13 +97,10 @@ def weekly_check_rotation():
             print(f"Deleting: {backup['Name']}")
             delete(backup["Name"])
 
-        print("Weekly Rotation Completed Successfully")
-
-
 def monthly_check_rotation():
     
         monthly = 1
-        remote_files = subprocess.check_output(["rclone", "lsjson", "remote:Back_it_up"]).decode('utf-8')
+        remote_files = subprocess.check_output(["rclone", "lsjson", remote]).decode('utf-8')
         backup_info = json.loads(remote_files)
         sorted_backups = sorted(backup_info, key=lambda x: datetime.fromisoformat(x["ModTime"][:-1]), reverse=True)
         today = datetime.today().date()
@@ -93,18 +110,19 @@ def monthly_check_rotation():
             print(f"Deleting: {backup['Name']}")
             delete(backup["Name"])
 
-        print("Monthly Rotation Completed Successfully")
-
 
 """
-notify() will notify on successfull execution of the script
+-------------------------------------------------------------------------------------
+notify() 
+
+  Will notify on successfull execution of the script
+-------------------------------------------------------------------------------------
 """
 
 def notify():
-  tstamp = datetime.now().strftime("||%m--%d--%Y||%H::%M::%S")
-  Enable_Curl = True
-  if Enable_Curl:
-    response = requests.post("https://webhook.site/e45e6bab-8f6f-4525-a95e-314c029bae1a", json={"project" : "backitup","date": tstamp, "test":"Success"}) 
+  curl = Curl_enable
+  if curl:
+    response = requests.post(Webhook_url, json={"project" : Project_dir ,"date": tstamp, "test":"Success"}) 
     if response.ok:
     	print("Request was successful")
     else:
@@ -112,21 +130,7 @@ def notify():
     	
     	
     	
-#function calls
-
-#updating local repo	
-pull_update_local()
-
-#create a backup an upload on drive using rclone
-make_backup()
-
-#checking the rotations
-daily_check_rotation()
-weekly_check_rotation()
-monthly_check_rotation()	
-
-#notification
-#notify()
+    	
 
 
 
