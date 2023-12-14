@@ -23,7 +23,7 @@ Before executing the script, ensure proper configuration of the `config.json` fi
   "Back_weekly": 7,
   "Back_monthly": 12
 }
-
+```
 - **Project_dir:** Local directory for backup storage.
 - **Curl_enable:** Enable or disable cURL for notifications.
 - **Webhook_url:** URL for webhook notifications.
