@@ -1,0 +1,9 @@
+{
+  "Project_dir": "/home/vboxuser/Back_it_up",
+  "Curl_enable": true,
+  "Webhook_url": "https://webhook.site/e45e6bab-8f6f-4525-a95e-314c029bae1a",
+  "Gdrive_folder": "Back_it_up",
+  "Back_daily": 4,
+  "Back_weekly": 7,
+  "Back_monthly": 12
+}
